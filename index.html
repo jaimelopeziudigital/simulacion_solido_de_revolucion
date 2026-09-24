@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulación 3D: Sólido de Revolución y Capas Cilíndricas</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- KaTeX for math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <!-- Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    /* Custom scrollbar styling for overlay panels */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(51, 65, 85, 0.8);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(71, 85, 105, 1);
+    }
+    /* Slider custom styling */
+    input[type=range] {
+      accent-color: #3b82f6;
+    }
+  </style>
+</head>
+<body class="h-full w-full overflow-hidden text-slate-100 font-sans select-none antialiased">
+
+  <!-- Main 3D Canvas -->
+  <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></div>
+
+  <!-- Header Bar -->
+  <header class="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+    <div class="pointer-events-auto bg-slate-900/85 backdrop-blur-md border border-slate-700/60 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+        <i class="fa-solid font-bold fa-cube text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+          Cálculo Integral: Método de Capas Cilíndricas
+        </h1>
+        <p class="text-xs text-slate-400">
+          Rotación de $f(x) = 4x - x^2$ y $g(x) = x$ alrededor del eje Y
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Presets Toolbar -->
+    <div class="pointer-events-auto bg-slate-900/85 backdrop-blur-md border border-slate-700/60 p-1.5 rounded-2xl shadow-2xl flex items-center gap-1 text-xs">
+      <button id="btn-preset-2d" class="px-3 py-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition flex items-center gap-1.5">
+        <i class="fa-solid fa-square-full text-blue-400 text-xs"></i> Vista 2D
+      </button>
+      <button id="btn-preset-3d" class="px-3 py-1.5 rounded-xl bg-blue-600/30 text-blue-300 border border-blue-500/40 hover:bg-blue-600/50 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-cube text-cyan-400 text-xs"></i> Vista 3D
+      </button>
+      <button id="btn-preset-top" class="px-3 py-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition flex items-center gap-1.5">
+        <i class="fa-solid fa-circle text-amber-400 text-xs"></i> Vista Superior
+      </button>
+      <button id="btn-reset-cam" class="px-3 py-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition" title="Restablecer Cámara">
+        <i class="fa-solid fa-rotate"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Left Control Panel -->
+  <aside class="absolute top-24 left-4 z-10 w-80 max-h-[calc(100vh-8rem)] overflow-y-auto bg-slate-900/85 backdrop-blur-md border border-slate-700/60 p-4 rounded-2xl shadow-2xl space-y-4">
+    
+    <!-- Section 1: Rotation Controls -->
+    <div class="space-y-2">
+      <div class="flex justify-between items-center text-xs font-semibold text-slate-300">
+        <span class="flex items-center gap-2">
+          <i class="fa-solid fa-arrows-spin text-blue-400"></i> Ángulo de Rotación ($\theta$)
+        </span>
+        <span id="angle-val-display" class="font-mono text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-800/50">360°</span>
+      </div>
+      <input type="range" id="slider-angle" min="0" max="360" value="360" step="1" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+      
+      <div class="flex items-center gap-2 pt-1">
+        <button id="btn-play-rotate" class="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-medium transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2">
+          <i id="icon-play-rotate" class="fa-solid fa-play"></i>
+          <span id="label-play-rotate">Animar Rotación</span>
+        </button>
+      </div>
+    </div>
+
+    <hr class="border-slate-800">
+
+    <!-- Section 2: Cylindrical Shell Position Controls -->
+    <div class="space-y-2">
+      <div class="flex justify-between items-center text-xs font-semibold text-slate-300">
+        <span class="flex items-center gap-2">
+          <i class="fa-solid fa-cylinder-vector text-amber-400"></i> Posición de Capa ($x$)
+        </span>
+        <span id="shell-x-display" class="font-mono text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/50">x = 1.50</span>
+      </div>
+      <input type="range" id="slider-shell-x" min="0.10" max="2.90" value="1.50" step="0.02" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+
+      <div class="flex justify-between items-center text-xs font-semibold text-slate-300 pt-1">
+        <span>Grosor Capa ($dx$)</span>
+        <span id="shell-dx-display" class="font-mono text-slate-400">0.08</span>
+      </div>
+      <input type="range" id="slider-shell-dx" min="0.02" max="0.25" value="0.08" step="0.01" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+
+      <button id="btn-play-scan" class="w-full py-1.5 bg-amber-600/80 hover:bg-amber-500 text-white rounded-xl text-xs font-medium transition shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2 mt-2">
+        <i id="icon-play-scan" class="fa-solid fa-arrows-left-right"></i>
+        <span id="label-play-scan">Escanear Capa ($x: 0 \to 3$)</span>
+      </button>
+    </div>
+
+    <hr class="border-slate-800">
+
+    <!-- Section 3: Visibility Toggles -->
+    <div class="space-y-2.5">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Visibilidad de Elementos</h3>
+      
+      <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer hover:text-white">
+        <span class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Región 2D $R$ (Plano XY)
+        </span>
+        <input type="checkbox" id="toggle-region" checked class="rounded bg-slate-800 border-slate-700 text-blue-600 focus:ring-0">
+      </label>
+
+      <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer hover:text-white">
+        <span class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span> Sólido de Revolución 3D
+        </span>
+        <input type="checkbox" id="toggle-solid" checked class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0">
+      </label>
+
+      <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer hover:text-white">
+        <span class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> Capa Cilíndrica Representativa
+        </span>
+        <input type="checkbox" id="toggle-shell" checked class="rounded bg-slate-800 border-slate-700 text-amber-600 focus:ring-0">
+      </label>
+
+      <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer hover:text-white">
+        <span class="flex items-center gap-2">
+          <i class="fa-solid fa-border-all text-slate-400"></i> Estructura Malla / Wireframe
+        </span>
+        <input type="checkbox" id="toggle-wireframe" class="rounded bg-slate-800 border-slate-700 text-blue-600 focus:ring-0">
+      </label>
+
+      <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer hover:text-white">
+        <span class="flex items-center gap-2">
+          <i class="fa-solid fa-ruler-combined text-slate-400"></i> Guías y Ejes de Coordenadas
+        </span>
+        <input type="checkbox" id="toggle-axes" checked class="rounded bg-slate-800 border-slate-700 text-blue-600 focus:ring-0">
+      </label>
+    </div>
+  </aside>
+
+  <!-- Right Math & Live Shell Info Panel -->
+  <aside class="absolute top-24 right-4 z-10 w-96 max-h-[calc(100vh-8rem)] overflow-y-auto bg-slate-900/85 backdrop-blur-md border border-slate-700/60 p-4 rounded-2xl shadow-2xl space-y-4">
+    
+    <!-- Mathematical Formula Container -->
+    <div class="space-y-2">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
+        <i class="fa-solid fa-square-root-variable"></i> Planteamiento de la Integral
+      </h3>
+      <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 text-center overflow-x-auto">
+        <div id="katex-integral-formula" class="text-slate-100 text-sm my-1"></div>
+      </div>
+      <div class="bg-blue-950/40 p-2.5 rounded-xl border border-blue-900/50 text-center">
+        <div class="text-xs text-blue-300 font-medium">Volumen Total Exacto:</div>
+        <div id="katex-volume-result" class="text-blue-200 font-bold text-base mt-0.5"></div>
+      </div>
+    </div>
+
+    <hr class="border-slate-800">
+
+    <!-- Live Parameters for Active Shell -->
+    <div class="space-y-3">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+        <i class="fa-solid fa-chart-simple"></i> Parámetros de la Capa ($x = $ <span id="math-x-val">1.50</span>)
+      </h3>
+
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+          <div class="text-slate-400 text-[11px]">Radio de la Capa ($r = x$)</div>
+          <div id="val-shell-r" class="text-amber-400 font-mono font-bold text-sm mt-0.5">1.50 u</div>
+        </div>
+        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+          <div class="text-slate-400 text-[11px]">Altura $h(x) = f(x) - g(x)$</div>
+          <div id="val-shell-h" class="text-amber-400 font-mono font-bold text-sm mt-0.5">2.25 u</div>
+        </div>
+        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+          <div class="text-slate-400 text-[11px]">Perímetro Base ($2\pi x$)</div>
+          <div id="val-shell-p" class="text-cyan-400 font-mono font-bold text-sm mt-0.5">9.42 u</div>
+        </div>
+        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+          <div class="text-slate-400 text-[11px]">Área Lateral ($2\pi x \cdot h$)</div>
+          <div id="val-shell-area" class="text-cyan-400 font-mono font-bold text-sm mt-0.5">21.21 u²</div>
+        </div>
+      </div>
+
+      <!-- Differential Shell Volume -->
+      <div class="bg-amber-950/30 p-3 rounded-xl border border-amber-900/40 text-xs space-y-1">
+        <div class="flex justify-between text-amber-300 font-semibold">
+          <span>Elemento de Volumen ($dV$):</span>
+          <span id="val-shell-dv" class="font-mono">1.70 u³</span>
+        </div>
+        <p class="text-[11px] text-amber-200/70 leading-relaxed">
+          $dV \approx 2\pi \cdot x \cdot h(x) \cdot dx$ corresponde al volumen aproximado de esta única capa delgada. Sumando infinitas capas desde $x=0$ a $3$ se obtiene el volumen total.
+        </p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Bottom Color Legend -->
+  <footer class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+    <div class="pointer-events-auto bg-slate-900/85 backdrop-blur-md border border-slate-700/60 px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-5 text-xs text-slate-300">
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></span>
+        <span>Curva Superior $f(x) = 4x - x^2$</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></span>
+        <span>Recta Inferior $g(x) = x$</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-amber-400 shadow-sm shadow-amber-400/50"></span>
+        <span>Capa Cilíndrica ($dV$)</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Functions definition
+    const f = (x) => 4 * x - x * x; // Upper function
+    const g = (x) => x;             // Lower function
+    const h = (x) => f(x) - g(x);   // Height h(x) = 3x - x^2
+    const X_MIN = 0;
+    const X_MAX = 3;
+
+    // Application state
+    const state = {
+      angleDeg: 360,
+      shellX: 1.50,
+      shellDx: 0.08,
+      showRegion: true,
+      showSolid: true,
+      showShell: true,
+      showWireframe: false,
+      showAxes: true,
+      isRotating: false,
+      isScanning: false,
+      rotateSpeed: 120, // deg / sec
+      scanDir: 1,      // 1 or -1
+      scanSpeed: 0.8   // x units / sec
+    };
+
+    // Three.js Scene Variables
+    let scene, camera, renderer, controls;
+    let regionMesh, regionOutline;
+    let solidMesh, solidWireframeMesh;
+    let shellMesh, shellOutlineMesh;
+    let axesGroup, annotationGroup;
+    let clock = new THREE.Clock();
+
+    function renderMathFormulas() {
+      if (typeof katex !== 'undefined') {
+        katex.render(
+          "V = 2\\pi \\int_{0}^{3} x \\cdot (4x - x^2 - x) \\, dx = 2\\pi \\int_{0}^{3} x (3x - x^2) \\, dx",
+          document.getElementById('katex-integral-formula'),
+          { displayMode: true, throwOnError: false }
+        );
+
+        katex.render(
+          "V = \\frac{27\\pi}{2} \\approx 42.4115 \\text{ u}^3",
+          document.getElementById('katex-volume-result'),
+          { displayMode: true, throwOnError: false }
+        );
+      }
+    }
+
+    function initThree() {
+      const container = document.getElementById('canvas-container');
+
+      // 1. Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0f1d);
+      scene.fog = new THREE.FogExp2(0x0a0f1d, 0.025);
+
+      // 2. Camera
+      camera = new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(4.5, 4.0, 7.5);
+
+      // 3. Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      // 4. OrbitControls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.target.set(0, 1.8, 0);
+      controls.maxPolarAngle = Math.PI / 2 + 0.1; // allow slightly below horizon
+
+      // 5. Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+      scene.add(ambientLight);
+
+      const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight1.position.set(8, 12, 10);
+      dirLight1.castShadow = true;
+      scene.add(dirLight1);
+
+      const dirLight2 = new THREE.DirectionalLight(0x3b82f6, 0.5); // Subtle cyan/blue fill
+      dirLight2.position.set(-8, -4, -6);
+      scene.add(dirLight2);
+
+      const pointLight = new THREE.PointLight(0xf59e0b, 0.8, 15); // Warm glow for shell
+      pointLight.position.set(0, 2, 0);
+      scene.add(pointLight);
+
+      // 6. Build Grid & Axes Helper
+      buildAxesAndGrid();
+
+      // 7. Initial Mesh Creation
+      build2DRegion();
+      updateSolidGeometry();
+      updateShellGeometry();
+      updateAnnotations();
+
+      // Event Listeners
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function buildAxesAndGrid() {
+      axesGroup = new THREE.Group();
+
+      // Grid on XZ plane
+      const gridHelper = new THREE.GridHelper(12, 24, 0x334155, 0x1e293b);
+      gridHelper.position.y = 0;
+      axesGroup.add(gridHelper);
+
+      // Axes vectors
+      const axisRadius = 0.025;
+      const axisLength = 5.0;
+
+      // X Axis (Red)
+      const xMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+      const xAxis = new THREE.Mesh(new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength), xMat);
+      xAxis.rotation.z = -Math.PI / 2;
+      xAxis.position.x = axisLength / 2;
+      axesGroup.add(xAxis);
+
+      // Y Axis (Green - Axis of Revolution)
+      const yMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+      const yAxis = new THREE.Mesh(new THREE.CylinderGeometry(axisRadius * 1.3, axisRadius * 1.3, axisLength + 1), yMat);
+      yAxis.position.y = (axisLength + 1) / 2;
+      axesGroup.add(yAxis);
+
+      // Z Axis (Blue)
+      const zMat = new THREE.MeshBasicMaterial({ color: 0x3b82f6 });
+      const zAxis = new THREE.Mesh(new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength), zMat);
+      zAxis.rotation.x = Math.PI / 2;
+      zAxis.position.z = axisLength / 2;
+      axesGroup.add(zAxis);
+
+      // Axis Arrows
+      const coneGeo = new THREE.ConeGeometry(0.08, 0.25, 16);
+      
+      const xCone = new THREE.Mesh(coneGeo, xMat);
+      xCone.rotation.z = -Math.PI / 2;
+      xCone.position.set(axisLength, 0, 0);
+      axesGroup.add(xCone);
+
+      const yCone = new THREE.Mesh(coneGeo, yMat);
+      yCone.position.set(0, axisLength + 1, 0);
+      axesGroup.add(yCone);
+
+      const zCone = new THREE.Mesh(coneGeo, zMat);
+      zCone.rotation.x = Math.PI / 2;
+      zCone.position.set(0, 0, axisLength);
+      axesGroup.add(zCone);
+
+      scene.add(axesGroup);
+    }
+
+    function build2DRegion() {
+      const shape = new THREE.Shape();
+      const steps = 60;
+
+      // Start at x = 0
+      shape.moveTo(0, 0);
+
+      // Upper curve f(x) = 4x - x^2 from 0 to 3
+      for (let i = 0; i <= steps; i++) {
+        const x = X_MIN + (X_MAX - X_MIN) * (i / steps);
+        const y = f(x);
+        shape.lineTo(x, y);
+      }
+
+      // Lower curve g(x) = x back from 3 to 0
+      for (let i = steps; i >= 0; i--) {
+        const x = X_MIN + (X_MAX - X_MIN) * (i / steps);
+        const y = g(x);
+        shape.lineTo(x, y);
+      }
+
+      const geometry = new THREE.ShapeGeometry(shape);
+      const material = new THREE.MeshPhongMaterial({
+        color: 0x3b82f6,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.7,
+        shininess: 80
+      });
+
+      regionMesh = new THREE.Mesh(geometry, material);
+      regionMesh.position.z = 0.001; // Tiny offset to prevent z-fighting
+
+      // Curve Outlines
+      const fPoints = [];
+      const gPoints = [];
+      for (let i = 0; i <= steps; i++) {
+        const x = X_MIN + (X_MAX - X_MIN) * (i / steps);
+        fPoints.push(new THREE.Vector3(x, f(x), 0.002));
+        gPoints.push(new THREE.Vector3(x, g(x), 0.002));
+      }
+
+      const fGeo = new THREE.BufferGeometry().setFromPoints(fPoints);
+      const fMat = new THREE.LineBasicMaterial({ color: 0x60a5fa, linewidth: 3 });
+      const fLine = new THREE.Line(fGeo, fMat);
+
+      const gGeo = new THREE.BufferGeometry().setFromPoints(gPoints);
+      const gMat = new THREE.LineBasicMaterial({ color: 0xf43f5e, linewidth: 3 });
+      const gLine = new THREE.Line(gGeo, gMat);
+
+      regionOutline = new THREE.Group();
+      regionOutline.add(fLine);
+      regionOutline.add(gLine);
+
+      regionMesh.add(regionOutline);
+      scene.add(regionMesh);
+    }
+
+    function updateSolidGeometry() {
+      if (solidMesh) {
+        scene.remove(solidMesh);
+        solidMesh.geometry.dispose();
+      }
+      if (solidWireframeMesh) {
+        scene.remove(solidWireframeMesh);
+        solidWireframeMesh.geometry.dispose();
+      }
+
+      const angleRad = (state.angleDeg * Math.PI) / 180;
+      if (angleRad <= 0.001) return;
+
+      const nX = 50;
+      const nTheta = Math.max(6, Math.ceil(80 * (state.angleDeg / 360)));
+
+      const positions = [];
+      const indices = [];
+      const normals = [];
+
+      // Helper index mapping function
+      // Grid 1: Top Surface y = f(x)
+      // Grid 2: Bottom Surface y = g(x)
+      const topIdx = (i, j) => i * (nTheta + 1) + j;
+      const botIdx = (i, j) => (nX + 1) * (nTheta + 1) + i * (nTheta + 1) + j;
+
+      // 1. Generate Vertices for Top and Bottom Surfaces
+      for (let surface = 0; surface < 2; surface++) {
+        for (let i = 0; i <= nX; i++) {
+          const x = X_MIN + (X_MAX - X_MIN) * (i / nX);
+          const y = (surface === 0) ? f(x) : g(x);
+
+          for (let j = 0; j <= nTheta; j++) {
+            const theta = angleRad * (j / nTheta);
+            const posX = x * Math.cos(theta);
+            const posZ = x * Math.sin(theta);
+
+            positions.push(posX, y, posZ);
+
+            // Compute surface normals dynamically
+            // df/dx = 4 - 2x, dg/dx = 1
+            const dydx = (surface === 0) ? (4 - 2 * x) : 1;
+            // Tangent along curve x: (cosθ, dydx, sinθ)
+            // Tangent along rotation θ: (-x sinθ, 0, x cosθ)
+            // Cross product yields normal
+            let nx = dydx * Math.cos(theta);
+            let ny = -1;
+            let nz = dydx * Math.sin(theta);
+            if (surface === 1) { // Flip normal for bottom surface
+              nx = -nx; ny = -ny; nz = -nz;
+            }
+            const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+            normals.push(nx / len, ny / len, nz / len);
+          }
+        }
+      }
+
+      // 2. Triangulate Top Surface
+      for (let i = 0; i < nX; i++) {
+        for (let j = 0; j < nTheta; j++) {
+          const a = topIdx(i, j);
+          const b = topIdx(i + 1, j);
+          const c = topIdx(i + 1, j + 1);
+          const d = topIdx(i, j + 1);
+
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      // 3. Triangulate Bottom Surface (Reversed Winding)
+      for (let i = 0; i < nX; i++) {
+        for (let j = 0; j < nTheta; j++) {
+          const a = botIdx(i, j);
+          const b = botIdx(i + 1, j);
+          const c = botIdx(i + 1, j + 1);
+          const d = botIdx(i, j + 1);
+
+          indices.push(a, d, b);
+          indices.push(b, d, c);
+        }
+      }
+
+      // 4. Side Caps at θ = 0 and θ = angleRad (if < 360°)
+      if (state.angleDeg < 360) {
+        // Cap at theta = 0
+        for (let i = 0; i < nX; i++) {
+          const t1 = topIdx(i, 0);
+          const t2 = topIdx(i + 1, 0);
+          const b1 = botIdx(i, 0);
+          const b2 = botIdx(i + 1, 0);
+
+          indices.push(t1, b1, t2);
+          indices.push(t2, b1, b2);
+        }
+
+        // Cap at theta = angleRad
+        for (let i = 0; i < nX; i++) {
+          const t1 = topIdx(i, nTheta);
+          const t2 = topIdx(i + 1, nTheta);
+          const b1 = botIdx(i, nTheta);
+          const b2 = botIdx(i + 1, nTheta);
+
+          indices.push(t1, t2, b1);
+          indices.push(t2, b2, b1);
+        }
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geometry.setIndex(indices);
+
+      const material = new THREE.MeshPhongMaterial({
+        color: 0x6366f1,
+        transparent: true,
+        opacity: 0.45,
+        shininess: 90,
+        side: THREE.DoubleSide
+      });
+
+      solidMesh = new THREE.Mesh(geometry, material);
+      solidMesh.visible = state.showSolid;
+      scene.add(solidMesh);
+
+      // Wireframe overlay
+      const wireGeo = new THREE.WireframeGeometry(geometry);
+      const wireMat = new THREE.LineBasicMaterial({
+        color: 0x818cf8,
+        transparent: true,
+        opacity: 0.3
+      });
+      solidWireframeMesh = new THREE.LineSegments(wireGeo, wireMat);
+      solidWireframeMesh.visible = state.showWireframe && state.showSolid;
+      scene.add(solidWireframeMesh);
+    }
+
+    function updateShellGeometry() {
+      if (shellMesh) {
+        scene.remove(shellMesh);
+        shellMesh.geometry.dispose();
+      }
+      if (shellOutlineMesh) {
+        scene.remove(shellOutlineMesh);
+        shellOutlineMesh.geometry.dispose();
+      }
+
+      const angleRad = (state.angleDeg * Math.PI) / 180;
+      if (angleRad <= 0.001) return;
+
+      const xC = state.shellX;
+      const dx = state.shellDx;
+
+      const r1 = Math.max(0.01, xC - dx / 2);
+      const r2 = xC + dx / 2;
+
+      // Heights at inner and outer radii
+      const yBot1 = g(r1), yTop1 = f(r1);
+      const yBot2 = g(r2), yTop2 = f(r2);
+
+      const nTheta = Math.max(8, Math.ceil(60 * (state.angleDeg / 360)));
+
+      const positions = [];
+      const indices = [];
+
+      // Grid construction for Cylindrical Shell
+      // 0: Inner Wall (r1, yBot1 -> yTop1)
+      // 1: Outer Wall (r2, yBot2 -> yTop2)
+      for (let j = 0; j <= nTheta; j++) {
+        const theta = angleRad * (j / nTheta);
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+
+        // Inner Wall Bottom (v0) & Top (v1)
+        positions.push(r1 * cosT, yBot1, r1 * sinT);
+        positions.push(r1 * cosT, yTop1, r1 * sinT);
+
+        // Outer Wall Bottom (v2) & Top (v3)
+        positions.push(r2 * cosT, yBot2, r2 * sinT);
+        positions.push(r2 * cosT, yTop2, r2 * sinT);
+      }
+
+      const stride = 4;
+      for (let j = 0; j < nTheta; j++) {
+        const idx = j * stride;
+        const v0 = idx,     v1 = idx + 1, v2 = idx + 2, v3 = idx + 3;
+        const w0 = idx + 4, w1 = idx + 5, w2 = idx + 6, w3 = idx + 7;
+
+        // Inner Wall Face
+        indices.push(v0, w0, v1);
+        indices.push(w0, w1, v1);
+
+        // Outer Wall Face
+        indices.push(v2, v3, w2);
+        indices.push(w2, v3, w3);
+
+        // Top Rim Face
+        indices.push(v1, w1, v3);
+        indices.push(w1, w3, v3);
+
+        // Bottom Rim Face
+        indices.push(v0, v2, w0);
+        indices.push(w0, v2, w2);
+      }
+
+      // Cut Caps at θ = 0 and θ = angleRad (if < 360°)
+      if (state.angleDeg < 360) {
+        // Cap at theta = 0
+        indices.push(0, 1, 2);
+        indices.push(2, 1, 3);
+
+        // Cap at theta = angleRad
+        const lastIdx = nTheta * stride;
+        indices.push(lastIdx, lastIdx + 2, lastIdx + 1);
+        indices.push(lastIdx + 2, lastIdx + 3, lastIdx + 1);
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshPhongMaterial({
+        color: 0xf59e0b, // Vibrant Gold/Amber
+        emissive: 0x78350f,
+        emissiveIntensity: 0.2,
+        transparent: true,
+        opacity: 0.85,
+        shininess: 100,
+        side: THREE.DoubleSide
+      });
+
+      shellMesh = new THREE.Mesh(geometry, material);
+      shellMesh.visible = state.showShell;
+      scene.add(shellMesh);
+
+      // High contrast edge lines for the shell
+      const edgesGeo = new THREE.EdgesGeometry(geometry, 15);
+      const edgesMat = new THREE.LineBasicMaterial({ color: 0xfef08a, linewidth: 2 });
+      shellOutlineMesh = new THREE.LineSegments(edgesGeo, edgesMat);
+      shellOutlineMesh.visible = state.showShell;
+      scene.add(shellOutlineMesh);
+    }
+
+    function updateAnnotations() {
+      if (annotationGroup) {
+        scene.remove(annotationGroup);
+      }
+
+      annotationGroup = new THREE.Group();
+
+      const x = state.shellX;
+      const yBot = g(x);
+      const yTop = f(x);
+      const yMid = (yBot + yTop) / 2;
+
+      // 1. Dashed Radius Line from Y-Axis (0, yMid, 0) to (x, yMid, 0)
+      const radiusPoints = [
+        new THREE.Vector3(0, yMid, 0),
+        new THREE.Vector3(x, yMid, 0)
+      ];
+      const radiusGeo = new THREE.BufferGeometry().setFromPoints(radiusPoints);
+      const radiusMat = new THREE.LineDashedMaterial({
+        color: 0x38bdf8,
+        dashSize: 0.1,
+        gapSize: 0.05
+      });
+      const radiusLine = new THREE.Line(radiusGeo, radiusMat);
+      radiusLine.computeLineDistances();
+      annotationGroup.add(radiusLine);
+
+      // 2. Base Trace Circle for Shell Radius at y = yBot
+      const circlePoints = [];
+      const steps = 64;
+      const angleRad = (state.angleDeg * Math.PI) / 180;
+      for (let i = 0; i <= steps; i++) {
+        const theta = angleRad * (i / steps);
+        circlePoints.push(new THREE.Vector3(x * Math.cos(theta), yBot, x * Math.sin(theta)));
+      }
+      const circleGeo = new THREE.BufferGeometry().setFromPoints(circlePoints);
+      const circleMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.6 });
+      const circleLine = new THREE.Line(circleGeo, circleMat);
+      annotationGroup.add(circleLine);
+
+      annotationGroup.visible = state.showAxes;
+      scene.add(annotationGroup);
+    }
+
+    function updateInfoDisplay() {
+      const x = state.shellX;
+      const dx = state.shellDx;
+      const fVal = f(x);
+      const gVal = g(x);
+      const hVal = h(x);
+      const perim = 2 * Math.PI * x;
+      const area = perim * hVal;
+      const dV = area * dx;
+
+      // Update DOM Text
+      document.getElementById('angle-val-display').innerText = `${Math.round(state.angleDeg)}°`;
+      document.getElementById('shell-x-display').innerText = `x = ${x.toFixed(2)}`;
+      document.getElementById('shell-dx-display').innerText = `${dx.toFixed(2)}`;
+      document.getElementById('math-x-val').innerText = `${x.toFixed(2)}`;
+
+      document.getElementById('val-shell-r').innerText = `${x.toFixed(2)} u`;
+      document.getElementById('val-shell-h').innerText = `${hVal.toFixed(2)} u`;
+      document.getElementById('val-shell-p').innerText = `${perim.toFixed(2)} u`;
+      document.getElementById('val-shell-area').innerText = `${area.toFixed(2)} u²`;
+      document.getElementById('val-shell-dv').innerText = `${dV.toFixed(2)} u³`;
+    }
+
+    function setupEventListeners() {
+      // Rotation Angle Slider
+      const sliderAngle = document.getElementById('slider-angle');
+      sliderAngle.addEventListener('input', (e) => {
+        state.angleDeg = parseFloat(e.target.value);
+        updateSolidGeometry();
+        updateShellGeometry();
+        updateAnnotations();
+        updateInfoDisplay();
+      });
+
+      // Shell Position x Slider
+      const sliderShellX = document.getElementById('slider-shell-x');
+      sliderShellX.addEventListener('input', (e) => {
+        state.shellX = parseFloat(e.target.value);
+        updateShellGeometry();
+        updateAnnotations();
+        updateInfoDisplay();
+      });
+
+      // Shell Thickness dx Slider
+      const sliderShellDx = document.getElementById('slider-shell-dx');
+      sliderShellDx.addEventListener('input', (e) => {
+        state.shellDx = parseFloat(e.target.value);
+        updateShellGeometry();
+        updateInfoDisplay();
+      });
+
+      // Toggle Checkboxes
+      document.getElementById('toggle-region').addEventListener('change', (e) => {
+        state.showRegion = e.target.checked;
+        regionMesh.visible = state.showRegion;
+      });
+
+      document.getElementById('toggle-solid').addEventListener('change', (e) => {
+        state.showSolid = e.target.checked;
+        if (solidMesh) solidMesh.visible = state.showSolid;
+        if (solidWireframeMesh) solidWireframeMesh.visible = state.showWireframe && state.showSolid;
+      });
+
+      document.getElementById('toggle-shell').addEventListener('change', (e) => {
+        state.showShell = e.target.checked;
+        if (shellMesh) shellMesh.visible = state.showShell;
+        if (shellOutlineMesh) shellOutlineMesh.visible = state.showShell;
+      });
+
+      document.getElementById('toggle-wireframe').addEventListener('change', (e) => {
+        state.showWireframe = e.target.checked;
+        if (solidWireframeMesh) solidWireframeMesh.visible = state.showWireframe && state.showSolid;
+      });
+
+      document.getElementById('toggle-axes').addEventListener('change', (e) => {
+        state.showAxes = e.target.checked;
+        axesGroup.visible = state.showAxes;
+        if (annotationGroup) annotationGroup.visible = state.showAxes;
+      });
+
+      // Animation Toggle Buttons
+      const btnPlayRotate = document.getElementById('btn-play-rotate');
+      btnPlayRotate.addEventListener('click', () => {
+        state.isRotating = !state.isRotating;
+        if (state.isRotating) {
+          state.isScanning = false;
+          updateAnimationUI();
+        } else {
+          updateAnimationUI();
+        }
+      });
+
+      const btnPlayScan = document.getElementById('btn-play-scan');
+      btnPlayScan.addEventListener('click', () => {
+        state.isScanning = !state.isScanning;
+        if (state.isScanning) {
+          state.isRotating = false;
+          updateAnimationUI();
+        } else {
+          updateAnimationUI();
+        }
+      });
+
+      // Camera Presets
+      document.getElementById('btn-preset-2d').addEventListener('click', () => {
+        animateCameraPosition(new THREE.Vector3(0, 1.8, 8), new THREE.Vector3(0, 1.8, 0));
+      });
+
+      document.getElementById('btn-preset-3d').addEventListener('click', () => {
+        animateCameraPosition(new THREE.Vector3(4.5, 4.0, 7.5), new THREE.Vector3(0, 1.8, 0));
+      });
+
+      document.getElementById('btn-preset-top').addEventListener('click', () => {
+        animateCameraPosition(new THREE.Vector3(0, 9.0, 0.001), new THREE.Vector3(0, 1.8, 0));
+      });
+
+      document.getElementById('btn-reset-cam').addEventListener('click', () => {
+        animateCameraPosition(new THREE.Vector3(4.5, 4.0, 7.5), new THREE.Vector3(0, 1.8, 0));
+      });
+    }
+
+    function updateAnimationUI() {
+      const iconRotate = document.getElementById('icon-play-rotate');
+      const labelRotate = document.getElementById('label-play-rotate');
+      if (state.isRotating) {
+        iconRotate.className = 'fa-solid fa-pause';
+        labelRotate.innerText = 'Pausar Rotación';
+      } else {
+        iconRotate.className = 'fa-solid fa-play';
+        labelRotate.innerText = 'Animar Rotación';
+      }
+
+      const iconScan = document.getElementById('icon-play-scan');
+      const labelScan = document.getElementById('label-play-scan');
+      if (state.isScanning) {
+        iconScan.className = 'fa-solid fa-pause';
+        labelScan.innerText = 'Pausar Escaneo';
+      } else {
+        iconScan.className = 'fa-solid fa-arrows-left-right';
+        labelScan.innerText = 'Escanear Capa (x: 0 → 3)';
+      }
+    }
+
+    function animateCameraPosition(targetPos, targetLookAt) {
+      const startPos = camera.position.clone();
+      const startTarget = controls.target.clone();
+      const startTime = performance.now();
+      const duration = 800; // ms
+
+      function step(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 0.5 - Math.cos(progress * Math.PI) / 2; // Smooth step
+
+        camera.position.lerpVectors(startPos, targetPos, ease);
+        controls.target.lerpVectors(startTarget, targetLookAt, ease);
+        controls.update();
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        }
+      }
+      requestAnimationFrame(step);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = clock.getDelta();
+
+      // Handle Rotation Animation
+      if (state.isRotating) {
+        state.angleDeg += state.rotateSpeed * delta;
+        if (state.angleDeg >= 360) {
+          state.angleDeg = 0;
+        }
+        document.getElementById('slider-angle').value = state.angleDeg;
+        updateSolidGeometry();
+        updateShellGeometry();
+        updateAnnotations();
+        updateInfoDisplay();
+      }
+
+      // Handle Shell Scan Animation
+      if (state.isScanning) {
+        state.shellX += state.scanDir * state.scanSpeed * delta;
+        if (state.shellX >= 2.90) {
+          state.shellX = 2.90;
+          state.scanDir = -1;
+        } else if (state.shellX <= 0.10) {
+          state.shellX = 0.10;
+          state.scanDir = 1;
+        }
+        document.getElementById('slider-shell-x').value = state.shellX;
+        updateShellGeometry();
+        updateAnnotations();
+        updateInfoDisplay();
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Startup Initialization
+    window.onload = function () {
+      renderMathFormulas();
+      initThree();
+      setupEventListeners();
+      updateInfoDisplay();
+      animate();
+    };
+  </script>
+</body>
+</html>
